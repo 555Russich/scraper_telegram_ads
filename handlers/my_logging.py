@@ -2,9 +2,10 @@
 import logging
 # redirect stdout
 import sys
+from pathlib import Path
 
 
-def get_logger(filename):
+def get_logger(filepath: Path):
     """ Define logger to write logs in specific file.
     mode='a' is appending if file already exists
     """
@@ -14,7 +15,7 @@ def get_logger(filename):
         format="[{asctime}]:[{levelname}]:{message}",
         style='{',
         handlers=[
-            logging.FileHandler(filename, mode='w'),
+            logging.FileHandler(filepath, mode='w'),
             logging.StreamHandler(sys.stdout),
         ]
     )
