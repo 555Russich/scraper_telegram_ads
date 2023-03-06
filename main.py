@@ -1,18 +1,21 @@
+import asyncio
 import json
 import logging
+import time
 import traceback
 import re
 
 from pywebio import start_server
-import pywebio.output as web_output
-import pywebio.input as web_input
+from pywebio.pin import *
+from pywebio.input import *
+from pywebio.output import *
+from pywebio.session import run_async
 
-from handlers.google_sheets import get_urls_from_reports
+from handlers.google_sheets import GoogleSheets
 from handlers.scraper import Scraper
 from handlers.my_logging import get_logger
 from settings import (
     FILEPATH_PLACEHOLDERS,
-    FILEPATH_SERVICE_ACCOUNT,
     FILEPATH_LOGGER
 )
 
@@ -40,40 +43,30 @@ def phone_validater(phone: str) -> None | str:
     return None if PATTERN_PHONE.match(phone) else 'Invalid format for phone number'
 
 
-async def main():
-    # placeholders = get_placeholders()
-    input_data = await web_input.input_group(
-        inputs=[
-            web_input.input(
-                label='Phone number of telegram account',
-                type='text',
-                name='phone',
-                value='+351914030998',
-                required=True,
-                help_text='+71234567890',
-                validate=phone_validater
-            ),
-            web_input.input(
-                label='Url of output file',
-                type='url',
-                name='url_output',
-                # placeholder=placeholders['url'],
-                required=True,
-                help_text='https://docs.google.com/spreadsheets/d/<file_id>',
-            )
-        ]
-    )
-    # save_placeholders(input_data)
+async def run_refresh_data():
+    url = await pin.url
 
-    phone, url = input_data['phone'], input_data['url_output']
+    gs = GoogleSheets()
+    error = gs.check_url(url)
+    if error is not None:
+        popup('ERROR', content=put_error(f'Invalid url.\n{error}'))
+        return
+
     try:
-        ads_data = Scraper(phone).scrap_ads_data()
+        ads_data = Scraper('+351914030998').scrap_ads_data()
+        popup('Success!', f'Data was written to file')
     except Exception as ex:
         logging.error(ex, exc_info=True)
-        web_output.put_error(traceback.format_exc())
+        put_error(traceback.format_exc())
 
-    print(phone, url)
-    web_output.put_success('success')
+async def main():
+    with use_scope('refresh_data'):
+        put_input(name='url', type='url', label='Enter link to spreadsheet')
+        put_button(label='Refresh data', onclick=run_refresh_data)
+
+
+    # with use_scope('scope1'):
+    #     await input('text2 in scope1')
 
 
 if __name__ == '__main__':
