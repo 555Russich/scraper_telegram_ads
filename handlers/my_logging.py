@@ -12,7 +12,7 @@ def get_logger(filepath: Path):
     logging.basicConfig(
         level=logging.INFO,
         encoding='utf-8',
-        format="[{asctime}]:[{levelname}]:{message}",
+        format="[{asctime}]:[{processName}]:[{levelname}]:{message}",
         style='{',
         handlers=[
             logging.FileHandler(filepath, mode='w'),

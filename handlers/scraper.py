@@ -1,17 +1,14 @@
 import logging
-from pathlib import Path
-import re
 import pickle
+import re
 import time
 from datetime import datetime
+from pathlib import Path
 
-from requests import Session
 from bs4 import BeautifulSoup
+from requests import Session
 
-from settings import (
-    TIMEOUT_CONFIRMATION,
-    DIR_COOKIES
-)
+from settings import TIMEOUT_CONFIRMATION, DIR_COOKIES
 
 DOMAIN = 'https://promote.telegram.org'
 PATTERN_CSV_HREF = re.compile(r'(?<="csvExport":"\\/csv\?).+?(?="})')
@@ -99,13 +96,11 @@ class Scraper:
             logging.info('Logged to account')
             return soup
 
-    def scrap_ads_data(self) -> list:
+    def scrap_ads_data(self, date_from: datetime) -> list:
         soup = self.go_to_account_page()
         data = []
 
-        for tr in soup.tbody.find_all('tr'):
-            ad_data = []
-
+        for tr in reversed(soup.tbody.find_all('tr')):
             tds = tr.find_all('td')
             url = DOMAIN + tds[0].find('a').get('href')
             id_ = url.split('/')[-1]
@@ -119,6 +114,9 @@ class Scraper:
             title = soup.find('input', {'id': 'ad_title'}).get('value')
             audience = ','.join(a.get('href').split('/')[-1]
                                 for a in soup.find('div', class_='pr-form-info-block plus').find_all('a'))
+            if not audience:
+                audience = soup.find('div', class_='pr-form-info-block plus').text\
+                    .replace('Will be shown in channels related to ', '')
 
             # Statistics tab
             response = self.session.get(
@@ -131,11 +129,13 @@ class Scraper:
             urls_csv = ['https://promote.telegram.org/csv?' + res for res in PATTERN_CSV_HREF.findall(response.text)]
 
             if not urls_csv:
-                logging.info(f'No csv links for {url=}')
+                if date_from and date_from > date_added:
+                    continue
+
                 single_day_data = {
                     'Ad id': id_,
                     'Ad title': title,
-                    'Date': date_added,
+                    'Date': datetime.strftime(date_added, '%d %b %Y'),
                     'Views': None,
                     'Joined': None,
                     'Ad spend': None,
@@ -143,46 +143,42 @@ class Scraper:
                     'Audience': audience,
                     'Status': status
                 }
-                ad_data.append(single_day_data)
-            else:
-                csv_views, csv_spent = [
-                    [row.split('\t') for row in self.session.get(url, headers=HEADERS_ACCOUNT).text.splitlines()]
-                    for url in urls_csv
-                ]
-                columns_views, columns_spent = (csv_views.pop(0), csv_spent.pop(0))
-                assert len(csv_views) == len(csv_spent)
+                data.append(single_day_data)
+                continue
 
-                for row_views, row_spent in zip(csv_views, csv_spent):
-                    assert row_views[0] == row_spent[0], 'Different date in csv rows'
+            csv_views, csv_spent = [
+                [row.split('\t') for row in self.session.get(url, headers=HEADERS_ACCOUNT).text.splitlines()]
+                for url in urls_csv
+            ]
+            columns_views, columns_spent = (csv_views.pop(0), csv_spent.pop(0))
+            assert len(csv_views) == len(csv_spent)
 
-                    if len(row_views) == 3:
-                        date, views, joined = row_views
-                    elif len(row_views) == 2:
-                        date, views = row_views
-                        joined = 0
-                    else:
-                        logging.error(f'Unexpected count of columns in {row_views}')
-                        date, views, joined = None, None, None
+            for row_views, row_spent in zip(csv_views, csv_spent):
+                assert row_views[0] == row_spent[0], 'Different date in csv rows'
+                spent = row_spent[1]
 
-                    spent = row_spent[1]
-                    day_data = {
-                        'Ad id': id_,
-                        'Ad title': title,
-                        'Date': date,
-                        'Views': views,
-                        'Joined': joined,
-                        'Ad spend': spent,
-                        'Link': link,
-                        'Audience': audience,
-                        'Status': status
-                    }
-                    ad_data.append(day_data)
-            data.append(ad_data)
+                if len(row_views) == 3:
+                    date, views, joined = row_views
+                elif len(row_views) == 2:
+                    date, views = row_views
+                    joined = 0
+                else:
+                    logging.error(f'Unexpected count of columns in {row_views}')
+                    date, views, joined = None, None, None
+
+                if date_from and datetime.strptime(date, '%d %b %Y') < date_from:
+                    continue
+
+                day_data = {
+                    'Ad id': id_,
+                    'Ad title': title,
+                    'Date': date,
+                    'Views': views,
+                    'Joined': joined,
+                    'Ad spend': spent,
+                    'Link': link,
+                    'Audience': audience,
+                    'Status': status
+                }
+                data.append(day_data)
         return data
-
-
-if __name__ == '__main__':
-    from my_logging import get_logger
-    get_logger(__name__)
-    scraper = Scraper(phone='+351914030998')
-    scraper.scrap_ads_data()

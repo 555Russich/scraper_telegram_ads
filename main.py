@@ -1,72 +1,162 @@
-import asyncio
-import json
 import logging
+import multiprocessing
 import time
-import traceback
-import re
+from datetime import datetime, timedelta
 
 from pywebio import start_server
-from pywebio.pin import *
 from pywebio.input import *
 from pywebio.output import *
-from pywebio.session import run_async
+from pywebio.pin import *
+from pywebio.session import run_js
 
+from settings import FILEPATH_LOGGER
 from handlers.google_sheets import GoogleSheets
-from handlers.scraper import Scraper
 from handlers.my_logging import get_logger
-from settings import (
-    FILEPATH_PLACEHOLDERS,
-    FILEPATH_LOGGER
-)
-
-PATTERN_PHONE = re.compile(r'^\+[1-9]\d{7,14}$')
+from handlers.scraper import Scraper
 
 
-def get_placeholders():
-    placeholders = {
-        'url': '',
-        'phone': '',
-    }
-    if FILEPATH_PLACEHOLDERS.exists():
-        with open(FILEPATH_PLACEHOLDERS, 'r') as f:
-            for k, v in json.load(f).items():
-                placeholders[k] = v
-    return placeholders
+def refresh_data(url: str) -> None:
+    gs = GoogleSheets(url)
+    last_date = gs.get_last_date()
+
+    data_new = Scraper('+351914030998').scrap_ads_data(last_date)
+    data_new.sort(key=lambda d: datetime.strptime(d['Date'], '%d %b %Y'))
+
+    if last_date:
+        gs.delete_last_day(last_date)
+
+    append_columns = True if not last_date else False
+    gs.append(data_new, append_columns)
 
 
-def save_placeholders(data):
-    with open(FILEPATH_PLACEHOLDERS, 'w') as f:
-        json.dump(data, f)
+async def run_refresh_data() -> None:
+    with use_scope('refresh_button', clear=True):
+        put_button(label='Refresh data', onclick=run_refresh_data, disabled=True)
 
-
-def phone_validater(phone: str) -> None | str:
-    return None if PATTERN_PHONE.match(phone) else 'Invalid format for phone number'
-
-
-async def run_refresh_data():
     url = await pin.url
-
-    gs = GoogleSheets()
-    error = gs.check_url(url)
-    if error is not None:
-        popup('ERROR', content=put_error(f'Invalid url.\n{error}'))
-        return
-
     try:
-        ads_data = Scraper('+351914030998').scrap_ads_data()
-        popup('Success!', f'Data was written to file')
+        refresh_data(url)
+        logging.info(f'Data was written to file')
+        popup('Success!', content=put_success(f'Data was written to file'))
     except Exception as ex:
-        logging.error(ex, exc_info=True)
-        put_error(traceback.format_exc())
+        logging.error(f'{url=}', exc_info=True)
+        popup('ERROR', content=put_error(str(ex)))
 
-async def main():
-    with use_scope('refresh_data'):
-        put_input(name='url', type='url', label='Enter link to spreadsheet')
+    with use_scope('refresh_button', clear=True):
         put_button(label='Refresh data', onclick=run_refresh_data)
 
 
-    # with use_scope('scope1'):
-    #     await input('text2 in scope1')
+class AutoUpdates:
+    current = []
+
+    @staticmethod
+    def auto_update(url: str, hour: int):
+        while True:
+            dt_next_update = datetime.utcnow().replace(hour=hour, minute=0, second=0, microsecond=0)
+
+            if dt_next_update < datetime.utcnow():
+                dt_next_update += timedelta(days=1)
+
+            seconds_before_update = (dt_next_update - datetime.utcnow()).seconds
+            logging.info(f'Auto_update {multiprocessing.current_process()} is sleeping for {seconds_before_update}')
+            time.sleep(seconds_before_update)
+            logging.info(f'Running auto update task {multiprocessing.current_process()}')
+
+            try:
+                refresh_data(url)
+            except Exception:
+                logging.error(f'Auto update task was finished unexpected', exc_info=True)
+                break
+
+    @staticmethod
+    def create_process(url: str, hour: int):
+        process = multiprocessing.Process(
+            target=AutoUpdates.auto_update,
+            kwargs={'url': url, 'hour': hour},
+        )
+        return process
+
+    @staticmethod
+    def start_auto_update(url: str, hour: int):
+        process = AutoUpdates.create_process(url, hour)
+        process.start()
+
+        process_info = {
+            'Process': process,
+            'Process ID': process.ident,
+            'Url': url,
+            'Hour (UTC+0 24h)': hour,
+        }
+
+        AutoUpdates.current.append(process_info)
+
+    @staticmethod
+    def remove_from_current(process: multiprocessing.Process):
+        for d in AutoUpdates.current:
+            if d['Process'] == process:
+                AutoUpdates.current.remove(d)
+                break
+
+    @staticmethod
+    def terminate_and_remove(process: multiprocessing.Process):
+        AutoUpdates.remove_from_current(process)
+        process.terminate()
+        logging.info(f'{process=} was terminated and removed')
+        run_js('window.location.reload()')
+
+    @staticmethod
+    def check_alive():
+        for d in AutoUpdates.current:
+            if not d['Process'].is_alive():
+                AutoUpdates.current.remove(d)
+
+
+async def main():
+    AutoUpdates.check_alive()
+
+    with use_scope('refresh_data'):
+        put_input(name='url', type=URL, label='Enter link to spreadsheet')
+        with use_scope('refresh_button', clear=True):
+            put_button(label='Refresh data', onclick=run_refresh_data)
+
+    put_text('\n')
+
+    with use_scope('auto_updates', clear=True):
+        if AutoUpdates.current:
+
+            put_table(
+                header=list(AutoUpdates.current[0].keys())[1:] + ['Delete Button'],
+                tdata=[
+                    list(d.values())[1:] +
+                    [put_button(
+                        label='Delete',
+                        onclick=lambda *args, **kwargs: AutoUpdates.terminate_and_remove(d['Process'])
+                    )]
+                    for d in AutoUpdates.current
+                ]
+            )
+
+        with use_scope('create_auto_update'):
+            data_auto_update_task = await input_group(
+                label='Create task for auto update',
+                inputs=[
+                    input(
+                        label='Enter link to spreadsheet',
+                        type=TEXT,
+                        name='url_auto_update',
+                        required=True,
+                    ),
+                    input(
+                        label='Hour (UTC+0 24h)',
+                        type=NUMBER,
+                        name='hour',
+                        required=True
+                    )
+                ],
+            )
+            url, hour = data_auto_update_task['url_auto_update'], data_auto_update_task['hour']
+            AutoUpdates.start_auto_update(url, hour)
+            run_js('window.location.reload()')
 
 
 if __name__ == '__main__':
