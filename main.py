@@ -3,7 +3,6 @@ import multiprocessing
 import time
 from datetime import datetime, timedelta
 
-import functions_framework
 from pywebio import start_server
 from pywebio.input import *
 from pywebio.output import *
@@ -26,7 +25,7 @@ def refresh_data(url: str) -> None:
     if last_date:
         gs.delete_last_day(last_date)
 
-    append_columns = True if not last_date else False
+    append_columns = False if last_date else True
     gs.append(data_new, append_columns)
 
 
@@ -112,8 +111,7 @@ class AutoUpdates:
                 AutoUpdates.current.remove(d)
 
 
-@functions_framework.http
-def main(request):
+def main():
     AutoUpdates.check_alive()
 
     with use_scope('refresh_data'):
