@@ -1,6 +1,6 @@
 from pathlib import Path
 
-DIR_PROJECT = Path('/media/russich555/hdd/Programming/Freelance/YouDo/25.scraper_telegram_ads')
+DIR_PROJECT = Path.cwd()
 DIR_WEB = Path(DIR_PROJECT, 'web')
 DIR_COOKIES = Path(DIR_WEB, 'cookies')
 
