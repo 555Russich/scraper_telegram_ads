@@ -36,5 +36,5 @@ class GoogleSheets:
         if append_columns:
             columns = list(data.pop(0).keys())
             self.worksheet.append_rows([columns])
-        rows = [list(row.values()) for row in data[1:]]
+        rows = [list(row.values()) for row in data]
         self.worksheet.append_rows(rows)
