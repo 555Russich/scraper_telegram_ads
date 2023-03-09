@@ -3,6 +3,7 @@ import multiprocessing
 import time
 from datetime import datetime, timedelta
 
+import functions_framework
 from pywebio import start_server
 from pywebio.input import *
 from pywebio.output import *
@@ -111,6 +112,7 @@ class AutoUpdates:
                 AutoUpdates.current.remove(d)
 
 
+@functions_framework.http
 async def main():
     AutoUpdates.check_alive()
 
