@@ -28,7 +28,6 @@ class GoogleSheets:
                 break
             # columns not in `worksheet_data` and index start from 1, that's why +1
             rows_to_delete.append(len(worksheet_data)+1 - i_)
-        print(rows_to_delete[-1], rows_to_delete[0])
 
         self.worksheet.delete_rows(start_index=rows_to_delete[-1], end_index=rows_to_delete[0])
 
