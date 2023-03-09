@@ -39,6 +39,20 @@ HEADERS_AUTH = {
     'Sec-Fetch-Site': 'same-origin',
 }
 
+DATA_SAMPLE = {
+    'Ad id': ...,
+    'Ad title': ...,
+    'Date': ...,
+    'Views': ...,
+    'Joined': ...,
+    'Ad spend': ...,
+    'CPM': ...,
+    'Budget': ...,
+    'Link': ...,
+    'Audience': ...,
+    'Status': ...
+}
+
 
 class Scraper:
     def __init__(self, phone: str):
@@ -101,21 +115,29 @@ class Scraper:
         data = []
 
         for tr in reversed(soup.tbody.find_all('tr')):
+            single_data = DATA_SAMPLE.copy()
+
             tds = tr.find_all('td')
             url = DOMAIN + tds[0].find('a').get('href')
-            id_ = url.split('/')[-1]
-            status = tds[-2].find('a').text
-            date_added = datetime.strptime(tds[-1].find('a').text[:-6], '%d %b %y')
+
+            single_data['Ad id'] = int(url.split('/')[-1])
+            single_data['CPM'] = float(tds[2].text.replace(tds[2].find('span').text, ''))
+            single_data['Budget'] = float(tds[3].text.replace(tds[3].find('span').text, ''))
+            single_data['Status'] = tds[-2].find('a').text
+            single_data['Date'] = datetime.strptime(tds[-1].find('a').text[:-6], '%d %b %y')
 
             # Info tab
             logging.info(f'Start scrapping {url=}')
             response = self.session.get(url, headers=HEADERS_ACCOUNT)
             soup = BeautifulSoup(response.text, 'lxml')
-            title = soup.find('input', {'id': 'ad_title'}).get('value')
-            audience = ','.join(a.get('href').split('/')[-1]
-                                for a in soup.find('div', class_='pr-form-info-block plus').find_all('a'))
-            if not audience:
-                audience = soup.find('div', class_='pr-form-info-block plus').text\
+            single_data['Ad title'] = soup.find('input', {'id': 'ad_title'}).get('value')
+            single_data['Audience'] = ','.join(
+                a.get('href').split('/')[-1]
+                for a in soup.find('div', class_='pr-form-info-block plus').find_all('a')
+            )
+
+            if single_data['Audience'] is ...:
+                single_data['Audience'] = soup.find('div', class_='pr-form-info-block plus').text\
                     .replace('Will be shown in channels related to ', '')
 
             # Statistics tab
@@ -125,25 +147,15 @@ class Scraper:
                 params={'period': 'day'}
             )
             soup = BeautifulSoup(response.text, 'lxml')
-            link = soup.find('a', class_="tgme_widget_message_link_button").get('href')
+            single_data['Link'] = soup.find('a', class_="tgme_widget_message_link_button").get('href')
             urls_csv = ['https://promote.telegram.org/csv?' + res for res in PATTERN_CSV_HREF.findall(response.text)]
 
             if not urls_csv:
-                if date_from and date_from > date_added:
+                if date_from and date_from > single_data['Date']:
                     continue
-
-                single_day_data = {
-                    'Ad id': id_,
-                    'Ad title': title,
-                    'Date': datetime.strftime(date_added, '%d %b %Y'),
-                    'Views': None,
-                    'Joined': None,
-                    'Ad spend': None,
-                    'Link': link,
-                    'Audience': audience,
-                    'Status': status
-                }
-                data.append(single_day_data)
+                single_data['Views'], single_data['Joined'], single_data['Ad spend'] = None, None, None
+                single_data['Date'] = datetime.strftime(single_data['Date'], '%d.%m.%y')
+                data.append(single_data)
                 continue
 
             csv_views, csv_spent = [
@@ -155,30 +167,21 @@ class Scraper:
 
             for row_views, row_spent in zip(csv_views, csv_spent):
                 assert row_views[0] == row_spent[0], 'Different date in csv rows'
-                spent = row_spent[1]
+                single_data['Ad spend'] = row_spent[1]
 
                 if len(row_views) == 3:
-                    date, views, joined = row_views
+                    single_data['Date'], single_data['Views'], single_data['Joined'] = row_views
                 elif len(row_views) == 2:
-                    date, views = row_views
-                    joined = 0
+                    single_data['Date'], single_data['Views'], single_data['Joined'] = row_views + [0]
                 else:
-                    logging.error(f'Unexpected count of columns in {row_views}')
-                    date, views, joined = None, None, None
+                    raise Exception(f'Unexpected count of columns. {url=}\n{row_views}')
 
-                if date_from and datetime.strptime(date, '%d %b %Y') < date_from:
+                single_data['Date'] = datetime.strptime(single_data['Date'], '%d %b %Y')
+
+                if date_from and single_data['Date'] < date_from:
                     continue
 
-                day_data = {
-                    'Ad id': id_,
-                    'Ad title': title,
-                    'Date': date,
-                    'Views': views,
-                    'Joined': joined,
-                    'Ad spend': spent,
-                    'Link': link,
-                    'Audience': audience,
-                    'Status': status
-                }
-                data.append(day_data)
+                single_data['Date'] = datetime.strftime(single_data['Date'], '%d.%m.%y')
+                data.append(single_data)
+                single_data = single_data.copy()
         return data

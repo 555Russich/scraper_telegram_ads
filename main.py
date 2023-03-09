@@ -20,13 +20,14 @@ def refresh_data(url: str) -> None:
     last_date = gs.get_last_date()
 
     data_new = Scraper('+351914030998').scrap_ads_data(last_date)
-    data_new.sort(key=lambda d: datetime.strptime(d['Date'], '%d %b %Y'))
+    data_new.sort(key=lambda d: datetime.strptime(d['Date'], '%d.%m.%y'))
 
     if last_date:
         gs.delete_last_day(last_date)
 
     append_columns = False if last_date else True
     gs.append(data_new, append_columns)
+    # gs.formatting()
 
 
 def run_refresh_data() -> None:
