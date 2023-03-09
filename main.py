@@ -3,6 +3,7 @@ import multiprocessing
 import time
 from datetime import datetime, timedelta
 
+import functions_framework
 from pywebio import start_server
 from pywebio.input import *
 from pywebio.output import *
@@ -29,11 +30,11 @@ def refresh_data(url: str) -> None:
     gs.append(data_new, append_columns)
 
 
-async def run_refresh_data() -> None:
+def run_refresh_data() -> None:
     with use_scope('refresh_button', clear=True):
         put_button(label='Refresh data', onclick=run_refresh_data, disabled=True)
 
-    url = await pin.url
+    url = pin.url
     try:
         refresh_data(url)
         logging.info(f'Data was written to file')
@@ -111,7 +112,8 @@ class AutoUpdates:
                 AutoUpdates.current.remove(d)
 
 
-async def main():
+@functions_framework.http
+def main(request):
     AutoUpdates.check_alive()
 
     with use_scope('refresh_data'):
@@ -137,7 +139,7 @@ async def main():
             )
 
         with use_scope('create_auto_update'):
-            data_auto_update_task = await input_group(
+            data_auto_update_task = input_group(
                 label='Create task for auto update',
                 inputs=[
                     input(
