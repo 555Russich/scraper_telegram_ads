@@ -28,13 +28,14 @@ class GoogleSheets:
                 break
             # columns not in `worksheet_data` and index start from 1, that's why +1
             rows_to_delete.append(len(worksheet_data)+1 - i_)
+        print(rows_to_delete[-1], rows_to_delete[0])
 
         self.worksheet.delete_rows(start_index=rows_to_delete[-1], end_index=rows_to_delete[0])
 
     def append(self, data: list[dict], append_columns: bool = False) -> None:
-        columns = list(data[0].keys())
-        rows = [list(row.values()) for row in data[1:]]
 
         if append_columns:
+            columns = list(data.pop(0).keys())
             self.worksheet.append_rows([columns])
+        rows = [list(row.values()) for row in data[1:]]
         self.worksheet.append_rows(rows)
