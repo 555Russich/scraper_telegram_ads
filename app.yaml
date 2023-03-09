@@ -1,0 +1,7 @@
+runtime: python
+env: flex
+entrypoint: python3.11 main.py --port=8080
+
+runtime_config:
+    operating_system: "ubuntu22"
+    runtime_version: "3.11"
