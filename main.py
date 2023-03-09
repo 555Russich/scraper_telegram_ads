@@ -113,7 +113,7 @@ class AutoUpdates:
 
 
 @functions_framework.http
-def main():
+def main(request):
     AutoUpdates.check_alive()
 
     with use_scope('refresh_data'):
