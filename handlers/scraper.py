@@ -70,8 +70,12 @@ class Scraper:
 
     def go_to_account_page(self) -> BeautifulSoup:
         if self.cookie_file.exists():
+            logging.info('File already exists!')
             self._load_cookies()
             logging.info(f'Cookies loaded from {str(self.cookie_file)}')
+            for k, v in self.session.cookies.items():
+                logging.info(f'{k=}, {v=}')
+            logging.info('\n')
 
         logging.info('Sending request to account page')
         response = self.session.get(
@@ -90,6 +94,7 @@ class Scraper:
                 data={'phone': self.phone}
             )
             temp_session_data = response.json()
+            logging.info(f'/auth/request\n{response.headers=}')
 
             start_timer = time.time()
             while time.time() - start_timer < TIMEOUT_CONFIRMATION:
@@ -101,7 +106,10 @@ class Scraper:
 
                 if response.text == 'true':
                     logging.info(f'Confirmation received')
+                    logging.info(f'/auth/login\n{response.headers=}\n')
                     self._save_cookies()
+                    for k, v in self.session.cookies.items():
+                        logging.info(f'{k=}, {v=}')
                     return self.go_to_account_page()
                 time.sleep(1)
             else:
