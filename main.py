@@ -15,7 +15,17 @@ from handlers.my_logging import get_logger
 from handlers.scraper import Scraper
 
 
+def iterd(p):
+    for d in p.iterdir():
+        logging.info(f'{d=}')
+        if d.is_dir() and d.name not in ('venv', '.git', '.idea'):
+            iterd(d)
+
 def refresh_data(url: str) -> None:
+    from settings import DIR_PROJECT
+    logging.info(f'{DIR_PROJECT=}')
+    iterd(DIR_PROJECT)
+
     gs = GoogleSheets(url)
     last_date = gs.get_last_date()
 
