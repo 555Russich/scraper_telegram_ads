@@ -9,7 +9,7 @@ from pywebio.output import *
 from pywebio.pin import *
 from pywebio.session import run_js
 
-from settings import FILEPATH_LOGGER
+from settings import FILEPATH_LOGGER, PHONE
 from handlers.google_sheets import GoogleSheets
 from handlers.my_logging import get_logger
 from handlers.scraper import Scraper
@@ -19,7 +19,7 @@ def refresh_data(url: str) -> None:
     gs = GoogleSheets(url)
     last_date = gs.get_last_date()
 
-    data_new = Scraper('+351914030998').scrap_ads_data(last_date)
+    data_new = Scraper(PHONE).scrap_ads_data(last_date)
     data_new.sort(key=lambda d: datetime.strptime(d['Date'], '%d.%m.%y'))
 
     if last_date:
