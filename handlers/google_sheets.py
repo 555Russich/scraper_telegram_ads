@@ -1,9 +1,6 @@
-import logging
 from datetime import datetime
-import string
 
-# import gspread
-import gspread.utils
+import gspread
 
 from settings import Path, FILEPATH_SERVICE_ACCOUNT
 
