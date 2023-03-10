@@ -1,6 +1,6 @@
 from pathlib import Path
 
-PHONE = '+79643213226'
+PHONE = '+351914030998'
 
 DIR_PROJECT = Path.cwd()
 DIR_WEB = Path(DIR_PROJECT, 'web')
