@@ -76,6 +76,8 @@ class Scraper:
             for k, v in self.session.cookies.items():
                 logging.info(f'{k=}, {v=}')
             logging.info('\n')
+        else:
+            logging.info('File does not exists')
 
         logging.info('Sending request to account page')
         response = self.session.get(
